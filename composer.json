@@ -1,0 +1,34 @@
+{
+    "name": "uiarts/responsive-images",
+    "description": "A Laravel package for generating responsive images and picture tags",
+    "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
+    "prefer-stable": true,
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {
+            "UIArts\\ResponsiveImages\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "UIArts\\ResponsiveImages\\Providers\\ResponsiveImagesServiceProvider"
+            ],
+            "aliases": {
+                "ResponsiveImages": "UIArts\\ResponsiveImages\\Facades\\ResponsiveImages"
+            }
+        }
+    },
+    "authors": [
+        {
+            "name": "UI-Arts"
+        }
+    ],
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "illuminate/support": "^8.0|^9.0|^10.0",
+        "intervention/image": "^2.7"
+    }
+}
