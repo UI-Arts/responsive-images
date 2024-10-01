@@ -17,7 +17,10 @@ return [
         'mode' => 'crop',
         'class_name' => '',
         'lazyload' => false,
-        'driver' => false
+        'driver' => false,
+        'image_attributes' => [
+            //
+        ]
     ],
     'driver' => env('RESPONSIVE_IMAGES_DRIVER', 'public')
 ];

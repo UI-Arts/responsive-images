@@ -17,6 +17,7 @@ class ResponsiveImages
     private $picture_title = 'Image';
     private $lastMobileImage;
     private $currentMime;
+    private $imageAttributes;
 
     private function setup($options)
     {
@@ -34,6 +35,8 @@ class ResponsiveImages
         $this->mode = $options['mode'];
         $this->class_name = $options['class_name'];
         $this->picture_title = $options['picture_title'];
+
+        $this->imageAttributes = $options['image_attributes'] ?? false;
     }
 
     private function getConfig($key)
@@ -93,14 +96,15 @@ class ResponsiveImages
                         height="'.$height.'"
                         loading="lazy"
                     alt="' . $this->picture_title . '"
-                    fetchpriority="low">';
+                    '. $this->printImageAttributes() .'>';
             } else {
                 $result .= '<img class="' . $this->class_name . '"
                     src="'. url($picture) . '"
                         width="'.$width.'"
                         height="'.$height.'"
                     alt="' . $this->picture_title . '"
-                    fetchpriority="low">';
+                    '. $this->printImageAttributes() .'>';
+
             }
         } else {
 
@@ -149,7 +153,7 @@ class ResponsiveImages
                         width="'.$calculatedMinWidth.'"
                         height="'.$calculatedMinHeight.'"
                     alt="' . $this->picture_title . '"
-                    fetchpriority="low">';
+                    '. $this->printImageAttributes() .'>';
         }
 
         return '<picture>'. $result. '</picture>';
@@ -276,6 +280,19 @@ class ResponsiveImages
         ];
 
         return isset($mimeMap[$mimeType]) ? $mimeMap[$mimeType] : null;
+    }
+
+    private function printImageAttributes()
+    {
+        $result = '';
+
+        if($this->imageAttributes && is_array($this->imageAttributes)) {
+            foreach ($this->imageAttributes as $key => $attr) {
+                $result .= $key.'="'. $attr .'" ';
+            }
+        }
+
+        return $result;
     }
 
 }
