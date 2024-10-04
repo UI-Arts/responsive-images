@@ -56,9 +56,7 @@ class GenerateResponsiveImages implements ShouldQueue
 
                     if ($encoded) {
                         $this->storage->put($link, (string) $encoded);
-                        if ($this->networkMode) {
-                            ResponsiveImage::create(['driver' => $this->driver, 'path' => $link]);
-                        }
+                        ResponsiveImage::create(['driver' => $this->driver, 'path' => $link]);
                     }
                 }
             }
