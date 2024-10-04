@@ -4,10 +4,13 @@ namespace UIArts\ResponsiveImages;
 
 use Illuminate\Support\Facades\Storage;
 use UIArts\ResponsiveImages\Jobs\GenerateResponsiveImages;
+use UIArts\ResponsiveImages\Models\ResponsiveImage;
 
 class ResponsiveImages
 {
     private $storage;
+    private $networkMode;
+    private $driver;
     private $size_pc;
     private $size_tablet;
     private $size_mobile;
@@ -24,8 +27,11 @@ class ResponsiveImages
         $default_options = $this->getConfig('default_options');
         $options = array_merge($default_options, $options);
 
+        $this->networkMode = $this->getNetworkMode($options['network_mode']);
+        $this->driver = $this->getFileSystemDriver($options['driver']);
+
         //set storage
-        $this->storage = Storage::disk($this->getFileSystemDriver($options['driver']));
+        $this->storage = Storage::disk($this->driver);
 
         $this->size_pc = explode(',', preg_replace('/\s/', '', $options['size_pc']));
         $this->size_tablet = explode(',', preg_replace('/\s/', '', $options['size_tablet']));
@@ -52,6 +58,16 @@ class ResponsiveImages
 
         return config('responsive-images.driver');
     }
+
+    public function getNetworkMode($networkMode)
+    {
+        if ($networkMode) {
+            return $networkMode;
+        }
+
+        return config('responsive-images.network_mode');
+    }
+
 
     public function generate(
         string $picture,
@@ -91,7 +107,7 @@ class ResponsiveImages
         ){
             if ($this->lazy) {
                 $result .= '<img class="' . $this->class_name . '"
-                    data-src="'.url($picture). '"
+                    data-src="'.$this->storage->url($picture). '"
                         width="'.$width.'"
                         height="'.$height.'"
                         loading="lazy"
@@ -99,7 +115,7 @@ class ResponsiveImages
                     '. $this->printImageAttributes() .'>';
             } else {
                 $result .= '<img class="' . $this->class_name . '"
-                    src="'. url($picture) . '"
+                    src="'. $this->storage->url($picture) . '"
                         width="'.$width.'"
                         height="'.$height.'"
                     alt="' . $this->picture_title . '"
@@ -116,23 +132,23 @@ class ResponsiveImages
                     foreach ($images as $type => $image){
                         if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0){
                             $result .= '<source srcset="
-                                    '.str_replace(' ','%20', url($image['mobile_x2'])) . ' 2x,
-                                    '.str_replace(' ','%20', url($image['mobile'])) .' 1x"
+                                    '.str_replace(' ','%20', $this->storage->url($image['mobile_x2'])) . ' 2x,
+                                    '.str_replace(' ','%20', $this->storage->url($image['mobile'])) .' 1x"
                                     media="(max-width: 480px)" type="image/'. $type .'">';
                             $result .= '<source srcset="
-                                    ' . str_replace(' ', '%20', url($image['tablet_x2'])) . ' 2x,
-                                    ' . str_replace(' ', '%20', url($image['tablet'])) . ' 1x"
+                                    ' . str_replace(' ', '%20', $this->storage->url($image['tablet_x2'])) . ' 2x,
+                                    ' . str_replace(' ', '%20', $this->storage->url($image['tablet'])) . ' 1x"
                                     media="(max-width: 992px)" type="image/'. $type .'">';
                             $result .= '<source srcset="
-                                    ' . str_replace(' ', '%20', url($image['pc_x2'])) . ' 2x,
-                                    ' . str_replace(' ', '%20', url($image['pc'])) . ' 1x
+                                    ' . str_replace(' ', '%20', $this->storage->url($image['pc_x2'])) . ' 2x,
+                                    ' . str_replace(' ', '%20', $this->storage->url($image['pc'])) . ' 1x
                                     " media="(min-width: 993px)" type="image/'. $type .'">';
                         }
                     }
                 }
 
             } else {
-                $result .= '<source srcset="'.str_replace(' ','%20', url($picture)) . '">';
+                $result .= '<source srcset="'.str_replace(' ','%20', $this->storage->url($picture)) . '">';
             }
 
             if(
@@ -149,7 +165,7 @@ class ResponsiveImages
             }
 
             $result .= '<img class="' . $this->class_name . '"
-                    src="'.str_replace(' ','%20', url($picture)) . '"
+                    src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                         width="'.$calculatedMinWidth.'"
                         height="'.$calculatedMinHeight.'"
                     alt="' . $this->picture_title . '"
@@ -212,7 +228,7 @@ class ResponsiveImages
         }
 
         if(count($imagesNotExist)){
-            dispatch(new GenerateResponsiveImages($original, $imagesNotExist, $sizes, $this->storage));
+            dispatch(new GenerateResponsiveImages($original, $imagesNotExist, $sizes, $this->driver, $this->networkMode));
         }
 
         return $images;
@@ -263,8 +279,9 @@ class ResponsiveImages
 
     private function fileExists($file)
     {
-
-        //s3 logic here
+        if ($this->networkMode) {
+            return ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->exists();
+        }
 
         return $this->storage->exists($file);
     }

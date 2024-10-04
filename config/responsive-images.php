@@ -18,9 +18,11 @@ return [
         'class_name' => '',
         'lazyload' => false,
         'driver' => false,
+        'network_mode' => false,
         'image_attributes' => [
             //
         ]
     ],
+    'network_mode' => env('RESPONSIVE_IMAGES_NETWORK_MODE', false),
     'driver' => env('RESPONSIVE_IMAGES_DRIVER', 'public')
 ];

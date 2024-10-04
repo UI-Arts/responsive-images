@@ -22,6 +22,7 @@ class ResponsiveImagesServiceProvider extends ServiceProvider
     {
         $this->publishes([
             __DIR__ . '/../../config/responsive-images.php' => config_path('responsive-images.php'),
+            __DIR__ . '/../../database/migrations' => database_path('migrations'),
         ], 'config');
     }
 }
