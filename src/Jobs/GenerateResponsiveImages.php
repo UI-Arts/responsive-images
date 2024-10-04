@@ -35,9 +35,9 @@ class GenerateResponsiveImages implements ShouldQueue
         $this->storage = Storage::disk($this->driver);
         foreach ($this->paths as $mime => $links) {
             foreach ($links as $key => $link) {
-                if ($this->fileExists($link)) {
+                if (!$this->fileExists($link)) {
                     $encoded = null;
-                    $image = Image::make($this->imageUrl); //it not work with network drivers need rewrite
+                    $image = Image::make($this->storage->get($this->imageUrl)); //it not work with network drivers need rewrite
 
                     $image->resize($this->sizes[$key]['width'], $this->sizes[$key]['height'], function ($constraint) {
                         $constraint->aspectRatio();

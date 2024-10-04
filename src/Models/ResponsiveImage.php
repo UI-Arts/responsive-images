@@ -11,6 +11,7 @@ class ResponsiveImage extends Model
     protected $primaryKey = 'id';
 
     protected $fillable = [
-        'path',
+        'driver', 'path',
     ];
+    public $timestamps = false;
 }
