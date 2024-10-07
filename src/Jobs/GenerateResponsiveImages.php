@@ -76,10 +76,10 @@ class GenerateResponsiveImages implements ShouldQueue
 
     private function fileExists($file)
     {
-        if (ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->exist()) {
+        if (ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->exists()) {
             return true;
         }
-        if (!$this->networkMode && $this->storage->exists($file)) { //maybe remove network mode here
+        if (!$this->networkMode && $this->storage->exists($file)) {
             $imageContent = $this->storage->get($file);
             $sizes = getimagesizefromstring($imageContent);
             ResponsiveImage::create([

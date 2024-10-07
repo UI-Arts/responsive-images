@@ -53,7 +53,7 @@ class ResponsiveImages
 
     public function getFileSystemDriver($driver)
     {
-        if($driver){
+        if ($driver) {
             return $driver;
         }
 
@@ -159,7 +159,7 @@ class ResponsiveImages
                 $calculatedMinHeight = $this->image->getHeightAttribute() ?? $this->size_pc[1];
             } else {
                 $calculatedMinWidth = $arraySizes['mobile']['width'];
-                $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
+                $calculatedMinHeight = $arraySizes['mobile']['height']; //TODO fix in some case string multiply on float
             }
 
             $result .= '<img class="' . $this->class_name . '"
@@ -171,6 +171,51 @@ class ResponsiveImages
         }
 
         return '<picture>'. $result. '</picture>';
+    }
+
+    public function getImageUrl($picture, $driver = null)
+    {
+        $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
+        if (!$this->driver) {
+            $this->driver = $this->getFileSystemDriver($driver);
+        }
+        if (!$this->storage) {
+            $this->storage = Storage::disk($this->driver);
+        }
+        return $this->storage->url($picture);
+    }
+
+    public function getImage($path, $driver = null)
+    {
+        $this->driver = $this->getFileSystemDriver($driver);
+        $this->storage = Storage::disk($this->driver);
+        return $this->storage->get($path);
+    }
+
+    public function uploadImage($path, $file, $driver = null)
+    {
+        $this->driver = $this->getFileSystemDriver($driver);
+        $this->storage = Storage::disk($this->driver);
+        $status = $this->storage->put($path, $file);
+        $sizes = getimagesizefromstring($file);
+        ResponsiveImage::create([
+            'driver' => $this->driver,
+            'path' => $path,
+            'image_data' => json_encode([
+                'mime_type' => $sizes['mime'],
+                'width' => $sizes[0],
+                'height' => $sizes[1],
+            ]),
+        ]);
+        return $status;
+    }
+
+    public function checkImage($path, $driver = null, $networkMode = null)
+    {
+        $this->driver = $this->getFileSystemDriver($driver);
+        $this->storage = Storage::disk($this->driver);
+        $this->networkMode = $this->getNetworkMode($networkMode);
+        return $this->fileExists($path);
     }
 
     private static function isAbsoluteUrl($url)
