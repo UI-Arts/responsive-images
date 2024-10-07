@@ -14,8 +14,9 @@ class CreateResponsiveImagesTable extends Migration
     {
         Schema::create('responsive_images', function (Blueprint $table) {
             $table->id();
-            $table->string('driver');
             $table->string('path');
+            $table->string('driver');
+            $table->json('image_data');
         });
     }
 

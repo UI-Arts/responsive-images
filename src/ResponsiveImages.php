@@ -11,6 +11,7 @@ class ResponsiveImages
     private $storage;
     private $networkMode;
     private $driver;
+    private $image;
     private $size_pc;
     private $size_tablet;
     private $size_mobile;
@@ -78,11 +79,11 @@ class ResponsiveImages
 
         $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
 
-        if(
+        if (
             is_null($picture) ||
             is_array($picture) ||
             !$this->fileExists($picture)
-        ){
+        ) {
             return false;
         }
 
@@ -93,18 +94,16 @@ class ResponsiveImages
         ]);
 
         $result = '';
+        $width = $this->image->getWidthAttribute() ?? $this->size_pc[0];
+        $height = $this->image->getHeightAttribute() ?? $this->size_pc[1];
 
-        $sizes = getimagesize($this->storage->path($picture));
-        $width = ($sizes && count($sizes) && $sizes[0]) ? $sizes[0] : $this->size_pc[0];
-        $height = ($sizes && count($sizes) && $sizes[1]) ? $sizes[1] : $this->size_pc[1];
-
-        $this->currentMime = $this->storage->mimeType($picture);
+        $this->currentMime = $this->image->getMimeTypeAttribute();
 
         if (
             $this->currentMime == 'image/svg+xml' ||
             $this->currentMime == 'image/svg' ||
             $this->currentMime == 'text/html'
-        ){
+        ) {
             if ($this->lazy) {
                 $result .= '<img class="' . $this->class_name . '"
                     data-src="'.$this->storage->url($picture). '"
@@ -130,7 +129,7 @@ class ResponsiveImages
 
                 if(count($images)){
                     foreach ($images as $type => $image){
-                        if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0){
+                        if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
                             $result .= '<source srcset="
                                     '.str_replace(' ','%20', $this->storage->url($image['mobile_x2'])) . ' 2x,
                                     '.str_replace(' ','%20', $this->storage->url($image['mobile'])) .' 1x"
@@ -151,15 +150,14 @@ class ResponsiveImages
                 $result .= '<source srcset="'.str_replace(' ','%20', $this->storage->url($picture)) . '">';
             }
 
-            if(
+            if (
                 $this->getLastMobileImage($images) &&
                 $this->fileExists($this->getLastMobileImage($images))
-            ){
+            ) {
                 $picture = $this->storage->path($this->getLastMobileImage($images));
-                $sizes = getimagesize($picture);
-                $calculatedMinWidth = ($sizes && count($sizes) && $sizes[0]) ? $sizes[0] : $this->size_pc[0];
-                $calculatedMinHeight = ($sizes && count($sizes) && $sizes[1]) ? $sizes[1] : $this->size_pc[1];
-            }else{
+                $calculatedMinWidth = $this->image->getWidthAttribute() ?? $this->size_pc[0];
+                $calculatedMinHeight = $this->image->getHeightAttribute() ?? $this->size_pc[1];
+            } else {
                 $calculatedMinWidth = $arraySizes['mobile']['width'];
                 $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
             }
@@ -213,7 +211,7 @@ class ResponsiveImages
             }
         }
 
-        foreach ($types as $type){
+        foreach ($types as $type) {
             foreach ($sizes as $s => $size){
 
                 $imagename = pathinfo($filename, PATHINFO_FILENAME).'.'. $type;
@@ -227,7 +225,7 @@ class ResponsiveImages
             }
         }
 
-        if(count($imagesNotExist)){
+        if (count($imagesNotExist)) {
             dispatch(new GenerateResponsiveImages($original, $imagesNotExist, $sizes, $this->driver, $this->networkMode));
         }
 
@@ -266,7 +264,7 @@ class ResponsiveImages
 
     private function getLastMobileImage($images)
     {
-        if($this->lastMobileImage){
+        if ($this->lastMobileImage) {
             return $this->lastMobileImage;
         }
 
@@ -279,11 +277,26 @@ class ResponsiveImages
 
     private function fileExists($file)
     {
-        if ($this->networkMode) {
-            return ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->exists();
+        $image = ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->first();
+        if ($image) {
+            $this->image = $image;
+            return true;
         }
-
-        return $this->storage->exists($file);
+        if (!$this->networkMode && $this->storage->exists($file)) {
+            $imageContent = $this->storage->get($file);
+            $sizes = getimagesizefromstring($imageContent);
+            $this->image = ResponsiveImage::create([
+                'driver' => $this->driver,
+                'path' => $file,
+                'image_data' => json_encode([
+                    'mime_type' => $sizes['mime'],
+                    'width' => $sizes[0],
+                    'height' => $sizes[1],
+                ]),
+            ]);
+            return true;
+        }
+        return false;
     }
 
     private function mimeToExtension($mimeType) {
@@ -303,7 +316,7 @@ class ResponsiveImages
     {
         $result = '';
 
-        if($this->imageAttributes && is_array($this->imageAttributes)) {
+        if ($this->imageAttributes && is_array($this->imageAttributes)) {
             foreach ($this->imageAttributes as $key => $attr) {
                 $result .= $key.'="'. $attr .'" ';
             }

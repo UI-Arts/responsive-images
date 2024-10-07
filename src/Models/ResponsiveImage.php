@@ -11,7 +11,26 @@ class ResponsiveImage extends Model
     protected $primaryKey = 'id';
 
     protected $fillable = [
-        'driver', 'path',
+        'path', 'driver', 'image_data',
     ];
     public $timestamps = false;
+
+    protected $casts = [
+        'image_data' => 'array'
+    ];
+
+    public function getMimeTypeAttribute()
+    {
+        return $this->image_data['mime_type'] ?? null;
+    }
+
+    public function getWidthAttribute()
+    {
+        return $this->image_data['width'] ?? null;
+    }
+
+    public function getHeightAttribute()
+    {
+        return $this->image_data['height'] ?? null;
+    }
 }

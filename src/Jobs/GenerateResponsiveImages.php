@@ -33,11 +33,12 @@ class GenerateResponsiveImages implements ShouldQueue
     public function handle()
     {
         $this->storage = Storage::disk($this->driver);
+        $originImage = Image::make($this->storage->get($this->imageUrl));
         foreach ($this->paths as $mime => $links) {
             foreach ($links as $key => $link) {
                 if (!$this->fileExists($link)) {
                     $encoded = null;
-                    $image = Image::make($this->storage->get($this->imageUrl)); //it not work with network drivers need rewrite
+                    $image = clone $originImage;
 
                     $image->resize($this->sizes[$key]['width'], $this->sizes[$key]['height'], function ($constraint) {
                         $constraint->aspectRatio();
@@ -56,7 +57,16 @@ class GenerateResponsiveImages implements ShouldQueue
 
                     if ($encoded) {
                         $this->storage->put($link, (string) $encoded);
-                        ResponsiveImage::create(['driver' => $this->driver, 'path' => $link]);
+                        $sizes = getimagesizefromstring($encoded);
+                        ResponsiveImage::create([
+                            'driver' => $this->driver,
+                            'path' => $link,
+                            'image_data' => json_encode([
+                                'mime_type' => $sizes['mime'],
+                                'width' => $sizes[0],
+                                'height' => $sizes[1],
+                            ]),
+                        ]);
                     }
                 }
             }
@@ -66,10 +76,23 @@ class GenerateResponsiveImages implements ShouldQueue
 
     private function fileExists($file)
     {
-        if ($this->networkMode) {
-            return ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->exists();
+        if (ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->exist()) {
+            return true;
         }
-
-        return $this->storage->exists($file);
+        if (!$this->networkMode && $this->storage->exists($file)) { //maybe remove network mode here
+            $imageContent = $this->storage->get($file);
+            $sizes = getimagesizefromstring($imageContent);
+            ResponsiveImage::create([
+                'driver' => $this->driver,
+                'path' => $file,
+                'image_data' => json_encode([
+                    'mime_type' => $sizes['mime'],
+                    'width' => $sizes[0],
+                    'height' => $sizes[1],
+                ]),
+            ]);
+            return true;
+        }
+        return false;
     }
 }
