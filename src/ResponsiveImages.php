@@ -395,7 +395,7 @@ class ResponsiveImages
                 return '<picture class="' . $this->picture_class_name . '"> 
                             <img class="' . $this->class_name . '" 
                                  src="https://picsum.photos/' . $this->size_pc[0] . '/' .
-                    ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
+                                    ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
                                  width="' . $this->size_pc[0] . '" 
                                  height="' . ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
                                  loading="lazy" alt="' . $this->picture_title . '"> 
