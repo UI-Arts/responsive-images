@@ -16,6 +16,7 @@ return [
         'size_mobile' => '290, 290',
         'mode' => 'crop',
         'class_name' => '',
+        'picture_class_name' => '',
         'lazyload' => false,
         'driver' => false,
         'network_mode' => false,
@@ -23,6 +24,7 @@ return [
             //
         ]
     ],
+    'placeholder_type' => env('RESPONSIVE_IMAGES_PLACEHOLDER_TYPE', 'none'),
     'network_mode' => env('RESPONSIVE_IMAGES_NETWORK_MODE', false),
     'driver' => env('RESPONSIVE_IMAGES_DRIVER', 'public')
 ];

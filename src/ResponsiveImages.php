@@ -18,6 +18,7 @@ class ResponsiveImages
     private $mode;
     private $lazy = false;
     private $class_name = '';
+    private $picture_class_name = '';
     private $picture_title = 'Image';
     private $lastMobileImage;
     private $currentMime;
@@ -42,6 +43,9 @@ class ResponsiveImages
         $this->mode = $options['mode'];
         $this->class_name = $options['class_name'];
         $this->picture_title = $options['picture_title'];
+        $this->picture_class_name = $options['picture_class_name'];
+
+        $this->lastMobileImage = null;
 
         $this->imageAttributes = $options['image_attributes'] ?? false;
     }
@@ -84,7 +88,7 @@ class ResponsiveImages
             is_array($picture) ||
             !$this->fileExists($picture)
         ) {
-            return false;
+            return $this->setPlaceholder();
         }
 
         $arraySizes = self::makeSizesArray([
@@ -170,7 +174,7 @@ class ResponsiveImages
                     '. $this->printImageAttributes() .'>';
         }
 
-        return '<picture>'. $result. '</picture>';
+        return '<picture class="'. $this->picture_class_name .'">'. $result. '</picture>';
     }
 
     public function getImageUrl($picture, $driver = null)
@@ -200,7 +204,7 @@ class ResponsiveImages
         $sizes = getimagesizefromstring($file);
         ResponsiveImage::create([
             'driver' => $this->driver,
-            'path' => $path,
+            'path' => ltrim($path, '/'),
             'image_data' => json_encode([
                 'mime_type' => $sizes['mime'],
                 'width' => $sizes[0],
@@ -215,7 +219,8 @@ class ResponsiveImages
         $this->driver = $this->getFileSystemDriver($driver);
         $this->storage = Storage::disk($this->driver);
         $this->networkMode = $this->getNetworkMode($networkMode);
-        return $this->fileExists($path);
+        $this->fileExists($path);
+        return $this->image;
     }
 
     private static function isAbsoluteUrl($url)
@@ -266,6 +271,7 @@ class ResponsiveImages
 
                 if(!$this->fileExists($images[$type][$s])){
                     $imagesNotExist[$type][$s] = $images[$type][$s];
+                    $images[$type][$s] = $path;
                 }
             }
         }
@@ -323,6 +329,7 @@ class ResponsiveImages
     private function fileExists($file)
     {
         $image = ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->first();
+        $this->image = null;
         if ($image) {
             $this->image = $image;
             return true;
@@ -370,4 +377,33 @@ class ResponsiveImages
         return $result;
     }
 
+    private function setPlaceholder()
+    {
+        $placeholderType = config('responsive-images.placeholder_type');
+
+        switch ($placeholderType) {
+            case 'static':
+                return '<picture class="' . $this->picture_class_name . '"> 
+                            <img class="' . $this->class_name . '" 
+                                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+                                 width="' . $this->size_pc[0] . '" 
+                                 height="' . $this->size_pc[1] . '" 
+                                 loading="lazy" alt="' . $this->picture_title . '"> 
+                        </picture>';
+
+            case 'dynamic':
+                return '<picture class="' . $this->picture_class_name . '"> 
+                            <img class="' . $this->class_name . '" 
+                                 src="https://picsum.photos/' . $this->size_pc[0] . '/' .
+                    ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
+                                 width="' . $this->size_pc[0] . '" 
+                                 height="' . ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
+                                 loading="lazy" alt="' . $this->picture_title . '"> 
+                        </picture>';
+
+            case 'none':
+            default:
+                return false;
+        }
+    }
 }
