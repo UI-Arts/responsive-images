@@ -162,8 +162,8 @@ class ResponsiveImages
                 $calculatedMinWidth = $this->image->getWidthAttribute() ?? $this->size_pc[0];
                 $calculatedMinHeight = $this->image->getHeightAttribute() ?? $this->size_pc[1];
             } else {
-                $calculatedMinWidth = $arraySizes['mobile']['width'];
-                $calculatedMinHeight = $arraySizes['mobile']['height']; //TODO fix in some case string multiply on float
+                $calculatedMinWidth = intval($arraySizes['mobile']['width']);
+                $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
             }
 
             $result .= '<img class="' . $this->class_name . '"
