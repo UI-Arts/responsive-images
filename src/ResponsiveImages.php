@@ -3,6 +3,7 @@
 namespace UIArts\ResponsiveImages;
 
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\Util;
 use UIArts\ResponsiveImages\Jobs\GenerateResponsiveImages;
 use UIArts\ResponsiveImages\Models\ResponsiveImage;
 
@@ -91,6 +92,32 @@ class ResponsiveImages
             return $this->setPlaceholder();
         }
 
+        $checkSvg = $this->storage->mimeType($picture);
+
+        if (in_array($checkSvg, ['image/svg+xml', 'image/svg', 'text/html'])) {
+            $svg = '';
+
+            if ($this->lazy) {
+                $svg .= '<img class="' . $this->class_name . '"
+                    data-src="'.$this->storage->url($picture). '"
+                        width="'.$this->size_pc[0].'"
+                        height="'.$this->size_pc[1].'"
+                        loading="lazy"
+                    alt="' . $this->picture_title . '"
+                    '. $this->printImageAttributes() .'>';
+            } else {
+                $svg .= '<img class="' . $this->class_name . '"
+                    src="'. $this->storage->url($picture) . '"
+                        width="'.$this->size_pc[0].'"
+                        height="'.$this->size_pc[1].'"
+                    alt="' . $this->picture_title . '"
+                    '. $this->printImageAttributes() .'>';
+
+            }
+
+            return '<picture class="'. $this->picture_class_name .'">'. $svg. '</picture>';
+        }
+
         $arraySizes = self::makeSizesArray([
             'mobile' => $this->size_mobile,
             'tablet' => $this->size_tablet,
@@ -103,76 +130,51 @@ class ResponsiveImages
 
         $this->currentMime = $this->image->getMimeTypeAttribute();
 
-        if (
-            $this->currentMime == 'image/svg+xml' ||
-            $this->currentMime == 'image/svg' ||
-            $this->currentMime == 'text/html'
-        ) {
-            if ($this->lazy) {
-                $result .= '<img class="' . $this->class_name . '"
-                    data-src="'.$this->storage->url($picture). '"
-                        width="'.$width.'"
-                        height="'.$height.'"
-                        loading="lazy"
-                    alt="' . $this->picture_title . '"
-                    '. $this->printImageAttributes() .'>';
-            } else {
-                $result .= '<img class="' . $this->class_name . '"
-                    src="'. $this->storage->url($picture) . '"
-                        width="'.$width.'"
-                        height="'.$height.'"
-                    alt="' . $this->picture_title . '"
-                    '. $this->printImageAttributes() .'>';
+        if ($this->currentMime != 'image/gif') {
 
-            }
-        } else {
+            $images = $this->getImagePath($picture, $arraySizes);
 
-            if ($this->currentMime != 'image/gif') {
-
-                $images = $this->getImagePath($picture, $arraySizes);
-
-                if(count($images)){
-                    foreach ($images as $type => $image){
-                        if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
-                            $result .= '<source srcset="
-                                    '.str_replace(' ','%20', $this->storage->url($image['mobile_x2'])) . ' 2x,
-                                    '.str_replace(' ','%20', $this->storage->url($image['mobile'])) .' 1x"
-                                    media="(max-width: 480px)" type="image/'. $type .'">';
-                            $result .= '<source srcset="
-                                    ' . str_replace(' ', '%20', $this->storage->url($image['tablet_x2'])) . ' 2x,
-                                    ' . str_replace(' ', '%20', $this->storage->url($image['tablet'])) . ' 1x"
-                                    media="(max-width: 992px)" type="image/'. $type .'">';
-                            $result .= '<source srcset="
-                                    ' . str_replace(' ', '%20', $this->storage->url($image['pc_x2'])) . ' 2x,
-                                    ' . str_replace(' ', '%20', $this->storage->url($image['pc'])) . ' 1x
-                                    " media="(min-width: 993px)" type="image/'. $type .'">';
-                        }
+            if(count($images)){
+                foreach ($images as $type => $image){
+                    if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
+                        $result .= '<source srcset="
+                                '.str_replace(' ','%20', $this->storage->url($image['mobile_x2'])) . ' 2x,
+                                '.str_replace(' ','%20', $this->storage->url($image['mobile'])) .' 1x"
+                                media="(max-width: 480px)" type="image/'. $type .'">';
+                        $result .= '<source srcset="
+                                ' . str_replace(' ', '%20', $this->storage->url($image['tablet_x2'])) . ' 2x,
+                                ' . str_replace(' ', '%20', $this->storage->url($image['tablet'])) . ' 1x"
+                                media="(max-width: 992px)" type="image/'. $type .'">';
+                        $result .= '<source srcset="
+                                ' . str_replace(' ', '%20', $this->storage->url($image['pc_x2'])) . ' 2x,
+                                ' . str_replace(' ', '%20', $this->storage->url($image['pc'])) . ' 1x
+                                " media="(min-width: 993px)" type="image/'. $type .'">';
                     }
                 }
-
-            } else {
-                $result .= '<source srcset="'.str_replace(' ','%20', $this->storage->url($picture)) . '">';
             }
 
-            if (
-                $this->getLastMobileImage($images) &&
-                $this->fileExists($this->getLastMobileImage($images))
-            ) {
-                $picture = $this->storage->path($this->getLastMobileImage($images));
-                $calculatedMinWidth = $this->image->getWidthAttribute() ?? $this->size_pc[0];
-                $calculatedMinHeight = $this->image->getHeightAttribute() ?? $this->size_pc[1];
-            } else {
-                $calculatedMinWidth = intval($arraySizes['mobile']['width']);
-                $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
-            }
-
-            $result .= '<img class="' . $this->class_name . '"
-                    src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
-                        width="'.$calculatedMinWidth.'"
-                        height="'.$calculatedMinHeight.'"
-                    alt="' . $this->picture_title . '"
-                    '. $this->printImageAttributes() .'>';
+        } else {
+            $result .= '<source srcset="'.str_replace(' ','%20', $this->storage->url($picture)) . '">';
         }
+
+        if (
+            $this->getLastMobileImage($images) &&
+            $this->fileExists($this->getLastMobileImage($images))
+        ) {
+            $picture = $this->storage->path($this->getLastMobileImage($images));
+            $calculatedMinWidth = $this->image->getWidthAttribute() ?? $this->size_pc[0];
+            $calculatedMinHeight = $this->image->getHeightAttribute() ?? $this->size_pc[1];
+        } else {
+            $calculatedMinWidth = intval($arraySizes['mobile']['width']);
+            $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
+        }
+
+        $result .= '<img class="' . $this->class_name . '"
+                src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
+                    width="'.$calculatedMinWidth.'"
+                    height="'.$calculatedMinHeight.'"
+                alt="' . $this->picture_title . '"
+                '. $this->printImageAttributes() .'>';
 
         return '<picture class="'. $this->picture_class_name .'">'. $result. '</picture>';
     }
@@ -335,6 +337,11 @@ class ResponsiveImages
             return true;
         }
         if (!$this->networkMode && $this->storage->exists($file)) {
+
+            if(mime_content_type($file) == 'image/svg+xml') {
+                return true;
+            }
+
             $imageContent = $this->storage->get($file);
             $sizes = getimagesizefromstring($imageContent);
             $this->image = ResponsiveImage::create([
@@ -383,27 +390,36 @@ class ResponsiveImages
 
         switch ($placeholderType) {
             case 'static':
-                return '<picture class="' . $this->picture_class_name . '"> 
-                            <img class="' . $this->class_name . '" 
-                                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
-                                 width="' . $this->size_pc[0] . '" 
-                                 height="' . $this->size_pc[1] . '" 
-                                 loading="lazy" alt="' . $this->picture_title . '"> 
+                return '<picture class="' . $this->picture_class_name . '">
+                            <img class="' . $this->class_name . '"
+                                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                                 width="' . $this->size_pc[0] . '"
+                                 height="' . $this->size_pc[1] . '"
+                                 loading="lazy" alt="' . $this->picture_title . '">
                         </picture>';
 
             case 'dynamic':
-                return '<picture class="' . $this->picture_class_name . '"> 
-                            <img class="' . $this->class_name . '" 
+                return '<picture class="' . $this->picture_class_name . '">
+                            <img class="' . $this->class_name . '"
                                  src="https://picsum.photos/' . $this->size_pc[0] . '/' .
-                                    ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
-                                 width="' . $this->size_pc[0] . '" 
-                                 height="' . ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '" 
-                                 loading="lazy" alt="' . $this->picture_title . '"> 
+                                    ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '"
+                                 width="' . $this->size_pc[0] . '"
+                                 height="' . ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '"
+                                 loading="lazy" alt="' . $this->picture_title . '">
                         </picture>';
 
             case 'none':
             default:
                 return false;
         }
+    }
+
+    private function clearPath($path)
+    {
+        if(!$this->networkMode) {
+            return str_replace(public_path(), '', $path);
+        }
+
+        return $path;
     }
 }

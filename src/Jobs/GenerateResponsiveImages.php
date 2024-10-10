@@ -23,7 +23,7 @@ class GenerateResponsiveImages implements ShouldQueue
 
     public function __construct($imageUrl, $paths, $sizes, $driver, $networkMode)
     {
-        $this->imageUrl = $imageUrl;
+        $this->imageUrl = $this->clearPath($imageUrl);
         $this->paths = $paths;
         $this->sizes = $sizes;
         $this->driver = $driver;
@@ -94,5 +94,14 @@ class GenerateResponsiveImages implements ShouldQueue
             return true;
         }
         return false;
+    }
+
+    private function clearPath($path)
+    {
+        if(!$this->networkMode) {
+            return str_replace(public_path(), '', $path);
+        }
+
+        return $path;
     }
 }

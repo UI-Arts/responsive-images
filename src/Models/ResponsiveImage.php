@@ -21,16 +21,32 @@ class ResponsiveImage extends Model
 
     public function getMimeTypeAttribute()
     {
-        return $this->image_data['mime_type'] ?? null;
+        $array = $this->convertJsonIfCastNotWork();
+
+        return $array['mime_type'] ?? null;
     }
 
     public function getWidthAttribute()
     {
-        return $this->image_data['width'] ?? null;
+        $array = $this->convertJsonIfCastNotWork();
+
+        return $array['width'] ?? null;
     }
 
     public function getHeightAttribute()
     {
-        return $this->image_data['height'] ?? null;
+        $array = $this->convertJsonIfCastNotWork();
+
+        return $array['height'] ?? null;
     }
+
+    private function convertJsonIfCastNotWork()
+    {
+        if(!is_array($this->image_data)) {
+            return json_decode($this->image_data, true);
+        }else{
+            return $this->image_data;
+        }
+    }
+
 }
