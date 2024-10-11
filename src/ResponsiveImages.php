@@ -92,9 +92,9 @@ class ResponsiveImages
             return $this->setPlaceholder();
         }
 
-        $checkSvg = $this->storage->mimeType($picture);
+        $this->currentMime = $this->image->getMimeTypeAttribute();
 
-        if (in_array($checkSvg, ['image/svg+xml', 'image/svg', 'text/html'])) {
+        if (in_array($this->currentMime, ['image/svg+xml', 'image/svg', 'text/html'])) {
             $svg = '';
 
             if ($this->lazy) {
@@ -127,8 +127,6 @@ class ResponsiveImages
         $result = '';
         $width = $this->image->getWidthAttribute() ?? $this->size_pc[0];
         $height = $this->image->getHeightAttribute() ?? $this->size_pc[1];
-
-        $this->currentMime = $this->image->getMimeTypeAttribute();
 
         if ($this->currentMime != 'image/gif') {
 
@@ -203,15 +201,19 @@ class ResponsiveImages
         $this->driver = $this->getFileSystemDriver($driver);
         $this->storage = Storage::disk($this->driver);
         $status = $this->storage->put($path, $file);
-        $sizes = getimagesizefromstring($file);
+        $sizes = @getimagesizefromstring($file);
+        $imageData = [
+            'mime_type' => $this->storage->mimeType($path)
+        ];
+        if ($sizes) {
+            $imageData['width'] = $sizes[0];
+            $imageData['height'] = $sizes[1];
+        }
+
         ResponsiveImage::create([
             'driver' => $this->driver,
-            'path' => ltrim($path, '/'),
-            'image_data' => json_encode([
-                'mime_type' => $sizes['mime'],
-                'width' => $sizes[0],
-                'height' => $sizes[1],
-            ]),
+            'path' => $path,
+            'image_data' => json_encode($imageData),
         ]);
         return $status;
     }
@@ -337,21 +339,20 @@ class ResponsiveImages
             return true;
         }
         if (!$this->networkMode && $this->storage->exists($file)) {
-
-            if(mime_content_type($file) == 'image/svg+xml') {
-                return true;
+            $imageContent = $this->storage->get($file);
+            $sizes = @getimagesizefromstring($imageContent);
+            $imageData = [
+                'mime_type' => $this->storage->mimeType($file),
+            ];
+            if ($sizes) {
+                $imageData['width'] = $sizes[0];
+                $imageData['height'] = $sizes[1];
             }
 
-            $imageContent = $this->storage->get($file);
-            $sizes = getimagesizefromstring($imageContent);
             $this->image = ResponsiveImage::create([
                 'driver' => $this->driver,
                 'path' => $file,
-                'image_data' => json_encode([
-                    'mime_type' => $sizes['mime'],
-                    'width' => $sizes[0],
-                    'height' => $sizes[1],
-                ]),
+                'image_data' => json_encode($imageData),
             ]);
             return true;
         }
