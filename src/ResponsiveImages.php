@@ -167,12 +167,23 @@ class ResponsiveImages
             $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
         }
 
-        $result .= '<img class="' . $this->class_name . '"
+        if($this->lazy){
+            $result .= '<img class="' . $this->class_name . '"
+                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                data-src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
+                    width="'.$calculatedMinWidth.'"
+                    height="'.$calculatedMinHeight.'"
+                alt="' . $this->picture_title . '"
+                loading="lazy"
+                '. $this->printImageAttributes() .'>';
+        }else{
+            $result .= '<img class="' . $this->class_name . '"
                 src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
                     width="'.$calculatedMinWidth.'"
                     height="'.$calculatedMinHeight.'"
                 alt="' . $this->picture_title . '"
                 '. $this->printImageAttributes() .'>';
+        }
 
         return '<picture class="'. $this->picture_class_name .'">'. $result. '</picture>';
     }
