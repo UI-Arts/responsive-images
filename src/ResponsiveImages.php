@@ -13,6 +13,7 @@ class ResponsiveImages
     private $networkMode;
     private $driver;
     private $image;
+    private $loadedImages = [];
     private $size_pc;
     private $size_tablet;
     private $size_mobile;
@@ -95,25 +96,8 @@ class ResponsiveImages
         $this->currentMime = $this->image->getMimeTypeAttribute();
 
         if (in_array($this->currentMime, ['image/svg+xml', 'image/svg', 'text/html'])) {
-            $svg = '';
 
-            if ($this->lazy) {
-                $svg .= '<img class="' . $this->class_name . '"
-                    data-src="'.$this->storage->url($picture). '"
-                        width="'.$this->size_pc[0].'"
-                        height="'.$this->size_pc[1].'"
-                        loading="lazy"
-                    alt="' . $this->picture_title . '"
-                    '. $this->printImageAttributes() .'>';
-            } else {
-                $svg .= '<img class="' . $this->class_name . '"
-                    src="'. $this->storage->url($picture) . '"
-                        width="'.$this->size_pc[0].'"
-                        height="'.$this->size_pc[1].'"
-                    alt="' . $this->picture_title . '"
-                    '. $this->printImageAttributes() .'>';
-
-            }
+            $svg = $this->generateHtmlImage('', $this->size_pc[0], $this->size_pc[1], $picture);
 
             return '<picture class="'. $this->picture_class_name .'">'. $svg. '</picture>';
         }
@@ -136,16 +120,16 @@ class ResponsiveImages
                 foreach ($images as $type => $image){
                     if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
                         $result .= '<source srcset="
-                                '.str_replace(' ','%20', $this->storage->url($image['mobile_x2'])) . ' 2x,
-                                '.str_replace(' ','%20', $this->storage->url($image['mobile'])) .' 1x"
+                                '.str_replace(' ','%20', $this->storage->url($this->clearPath($image['mobile_x2']))) . ' 2x,
+                                '.str_replace(' ','%20', $this->storage->url($this->clearPath($image['mobile']))) .' 1x"
                                 media="(max-width: 480px)" type="image/'. $type .'">';
                         $result .= '<source srcset="
-                                ' . str_replace(' ', '%20', $this->storage->url($image['tablet_x2'])) . ' 2x,
-                                ' . str_replace(' ', '%20', $this->storage->url($image['tablet'])) . ' 1x"
+                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['tablet_x2']))) . ' 2x,
+                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['tablet']))) . ' 1x"
                                 media="(max-width: 992px)" type="image/'. $type .'">';
                         $result .= '<source srcset="
-                                ' . str_replace(' ', '%20', $this->storage->url($image['pc_x2'])) . ' 2x,
-                                ' . str_replace(' ', '%20', $this->storage->url($image['pc'])) . ' 1x
+                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['pc_x2']))) . ' 2x,
+                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['pc']))) . ' 1x
                                 " media="(min-width: 993px)" type="image/'. $type .'">';
                     }
                 }
@@ -167,23 +151,7 @@ class ResponsiveImages
             $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
         }
 
-        if($this->lazy){
-            $result .= '<img class="' . $this->class_name . '"
-                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-                data-src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
-                    width="'.$calculatedMinWidth.'"
-                    height="'.$calculatedMinHeight.'"
-                alt="' . $this->picture_title . '"
-                loading="lazy"
-                '. $this->printImageAttributes() .'>';
-        }else{
-            $result .= '<img class="' . $this->class_name . '"
-                src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
-                    width="'.$calculatedMinWidth.'"
-                    height="'.$calculatedMinHeight.'"
-                alt="' . $this->picture_title . '"
-                '. $this->printImageAttributes() .'>';
-        }
+        $result = $this->generateHtmlImage($result, $calculatedMinWidth, $calculatedMinHeight, $picture);
 
         return '<picture class="'. $this->picture_class_name .'">'. $result. '</picture>';
     }
@@ -343,10 +311,16 @@ class ResponsiveImages
 
     private function fileExists($file)
     {
+        if(isset($this->loadedImages[$file])){
+            $this->image = $this->loadedImages[$file];
+            return true;
+        }
+
         $image = ResponsiveImage::where(['driver' => $this->driver, 'path' => $file])->first();
         $this->image = null;
         if ($image) {
             $this->image = $image;
+            $this->loadedImages[$file] = $image;
             return true;
         }
         if (!$this->networkMode && $this->storage->exists($file)) {
@@ -433,5 +407,28 @@ class ResponsiveImages
         }
 
         return $path;
+    }
+
+    private function generateHtmlImage($result, $width, $height, $picture)
+    {
+        if($this->lazy){
+            $result .= '<img class="' . $this->class_name . '"
+                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                data-src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
+                    width="'.$width.'"
+                    height="'.$height.'"
+                alt="' . $this->picture_title . '"
+                loading="lazy"
+                '. $this->printImageAttributes() .'>';
+        }else{
+            $result .= '<img class="' . $this->class_name . '"
+                src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
+                    width="'.$width.'"
+                    height="'.$height.'"
+                alt="' . $this->picture_title . '"
+                '. $this->printImageAttributes() .'>';
+        }
+
+        return $result;
     }
 }
