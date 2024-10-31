@@ -85,6 +85,8 @@ class ResponsiveImages
 
         $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
 
+        $picture = $this->checkAndReplaceEncodedFilePath($picture);
+
         if (
             is_null($picture) ||
             is_array($picture) ||
@@ -430,5 +432,18 @@ class ResponsiveImages
         }
 
         return $result;
+    }
+
+    private function checkAndReplaceEncodedFilePath($path)
+    {
+        if(!$this->networkMode) {
+            if($this->storage->exists($path)){
+                return $path;
+            }else if($this->storage->exists(str_replace('%20', ' ', $path))){
+                return str_replace('%20', ' ', $path);
+            }
+        }
+
+        return $path;
     }
 }
