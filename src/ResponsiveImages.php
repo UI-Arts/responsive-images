@@ -4,6 +4,7 @@ namespace UIArts\ResponsiveImages;
 
 use Illuminate\Support\Facades\Storage;
 use League\Flysystem\Util;
+use Illuminate\Support\Facades\Log;
 use UIArts\ResponsiveImages\Jobs\GenerateResponsiveImages;
 use UIArts\ResponsiveImages\Models\ResponsiveImage;
 
@@ -23,7 +24,6 @@ class ResponsiveImages
     private $picture_class_name = '';
     private $picture_title = 'Image';
     private $lastMobileImage;
-    private $currentMime;
     private $imageAttributes;
 
     private function setup($options)
@@ -68,7 +68,7 @@ class ResponsiveImages
 
     public function getNetworkMode($networkMode)
     {
-        if ($networkMode) {
+        if (isset($networkMode)) {
             return $networkMode;
         }
 
@@ -77,31 +77,16 @@ class ResponsiveImages
 
 
     public function generate(
-        string $picture,
+        $picture,
         array $options
     )
     {
         $this->setup($options);
 
-        $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
+        $pictures = $this->checkImagesSizes(is_array($picture) ? $picture : [$picture]);
 
-        $picture = $this->checkAndReplaceEncodedFilePath($picture);
-
-        if (
-            is_null($picture) ||
-            is_array($picture) ||
-            !$this->fileExists($picture)
-        ) {
+        if (is_null($picture) || (!isset($pictures['pc']) && !isset($pictures['tablet']) && !isset($pictures['mobile']))) {
             return $this->setPlaceholder();
-        }
-
-        $this->currentMime = $this->image->getMimeTypeAttribute();
-
-        if (in_array($this->currentMime, ['image/svg+xml', 'image/svg', 'text/html'])) {
-
-            $svg = $this->generateHtmlImage('', $this->size_pc[0], $this->size_pc[1], $picture);
-
-            return '<picture class="'. $this->picture_class_name .'">'. $svg. '</picture>';
         }
 
         $arraySizes = self::makeSizesArray([
@@ -110,64 +95,122 @@ class ResponsiveImages
             'pc' => $this->size_pc
         ]);
 
+        $mediaCondition = self::generateMediaConditions($pictures);
+
         $result = '';
-        $width = $this->image->getWidthAttribute() ?? $this->size_pc[0];
-        $height = $this->image->getHeightAttribute() ?? $this->size_pc[1];
+        $images = $this->getImagePath($pictures, $arraySizes);
 
-        if ($this->currentMime != 'image/gif') {
-
-            $images = $this->getImagePath($picture, $arraySizes);
-
-            if(count($images)){
-                foreach ($images as $type => $image){
-                    if($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
-                        $result .= '<source srcset="
-                                '.str_replace(' ','%20', $this->storage->url($this->clearPath($image['mobile_x2']))) . ' 2x,
-                                '.str_replace(' ','%20', $this->storage->url($this->clearPath($image['mobile']))) .' 1x"
-                                media="(max-width: 480px)" type="image/'. $type .'">';
-                        $result .= '<source srcset="
-                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['tablet_x2']))) . ' 2x,
-                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['tablet']))) . ' 1x"
-                                media="(max-width: 992px)" type="image/'. $type .'">';
-                        $result .= '<source srcset="
-                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['pc_x2']))) . ' 2x,
-                                ' . str_replace(' ', '%20', $this->storage->url($this->clearPath($image['pc']))) . ' 1x
-                                " media="(min-width: 993px)" type="image/'. $type .'">';
+        if (count($images)) {
+            foreach ($images as $type => $device) {
+                if ($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
+                    foreach ($device as $image) {
+                        $result .= $this->generateSourceTag($image, $mediaCondition);
                     }
                 }
             }
-
-        } else {
-            $result .= '<source srcset="'.str_replace(' ','%20', $this->storage->url($picture)) . '">';
         }
 
-        if (
-            $this->getLastMobileImage($images) &&
-            $this->fileExists($this->getLastMobileImage($images))
-        ) {
-            $picture = $this->storage->path($this->getLastMobileImage($images));
-            $calculatedMinWidth = $this->image->getWidthAttribute() ?? $this->size_pc[0];
-            $calculatedMinHeight = $this->image->getHeightAttribute() ?? $this->size_pc[1];
+        $lastMobileImage = $this->getLastMobileImage($images);
+        if ($lastMobileImage && $this->fileExists($lastMobileImage)) {
+            $picturePath = $lastMobileImage;
+            $calculatedMinWidth = (int) $this->image->getWidthAttribute() ?? $this->size_pc[0];
+            $calculatedMinHeight = (int) $this->image->getHeightAttribute() ?? $this->size_pc[1];
         } else {
-            $calculatedMinWidth = intval($arraySizes['mobile']['width']);
-            $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
+            $lastPicture = end($pictures);
+            $picturePath = $lastPicture['path'] ?? null;
+
+            if ($picturePath && isset($this->loadedImages[$picturePath])) {
+                $width = (int) $this->loadedImages[$picturePath]->getWidthAttribute() ?? $this->size_pc[0];
+                $height = (int) $this->loadedImages[$picturePath]->getHeightAttribute() ?? $this->size_pc[1];
+
+                if ($width > 0) {
+                    $calculatedMinWidth = intval($arraySizes['mobile']['width']);
+                    $calculatedMinHeight = intval(($calculatedMinWidth / $width) * $height);
+                } else {
+                    $calculatedMinWidth = $this->size_pc[0];
+                    $calculatedMinHeight = $this->size_pc[1];
+                }
+            } else {
+                $calculatedMinWidth = $this->size_pc[0];
+                $calculatedMinHeight = $this->size_pc[1];
+            }
         }
 
-        $result = $this->generateHtmlImage($result, $calculatedMinWidth, $calculatedMinHeight, $picture);
+        $result = $this->generateHtmlImage($result, $calculatedMinWidth, $calculatedMinHeight, $picturePath);
 
         return '<picture class="'. $this->picture_class_name .'">'. $result. '</picture>';
     }
 
+    private function generateSourceTag(array $image, ?array $mediaCondition)
+    {
+        $result = '<source srcset="';
+
+        if (isset($image['path_x2'])) {
+            $result .= str_replace(' ', '%20', $this->storage->url($image['path_x2'])) . ' 2x, ';
+        }
+
+        if (isset($image['path'])) {
+            $result .= str_replace(' ', '%20', $this->storage->url($image['path'])) . ' 1x"';
+        } else {
+            return '';
+        }
+
+        if ($mediaCondition) {
+            $result .= ' media="' . $mediaCondition[$image['device']] . '"';
+        }
+
+        // Add type attribute
+        $result .= ' type="image/' . $image['type'] . '">';
+
+        return $result;
+    }
+
+    private function generateMediaConditions(?array $pictures): ?array
+    {
+        $count = count($pictures);
+        if ($count <= 1) {
+            return null;
+        }
+
+        if ($count === 2) {
+            if (isset($pictures['mobile']) && isset($pictures['pc'])) {
+                return [
+                    'mobile' => '(max-width: 480px)',
+                    'pc' => '(min-width: 481px)'
+                ];
+            } elseif (isset($pictures['tablet']) && isset($pictures['pc'])) {
+                return [
+                  'tablet' => '(max-width: 992px)',
+                  'pc' => '(min-width: 993px)'
+                ];
+            } elseif (isset($pictures['mobile']) && isset($pictures['tablet'])) {
+                return [
+                    'mobile' => '(max-width: 480px)',
+                    'tablet' => '(min-width: 481px)'
+                ];
+            }
+        }
+
+        return [
+            'mobile' => '(max-width: 480px)',
+            'tablet' => '(min-width: 481px) and (max-width: 992px)',
+            'pc' => '(min-width: 993px)',
+        ];
+    }
+
     public function getImageUrl($picture, $driver = null)
     {
-        $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
-        if (!$this->driver) {
-            $this->driver = $this->getFileSystemDriver($driver);
-        }
-        if (!$this->storage) {
-            $this->storage = Storage::disk($this->driver);
-        }
-        return $this->storage->url($picture);
+        $this->driver = $this->getFileSystemDriver($driver);
+        $this->storage = Storage::disk($this->driver);
+
+        $generateUrl = function($pic) {
+            $pic = self::isAbsoluteUrl($pic) ? self::getRelativeUrl($pic) : ltrim($pic, '/');
+            return $this->storage->url($pic);
+        };
+
+        return is_array($picture)
+            ? array_map($generateUrl, $picture)
+            : $generateUrl($picture);
     }
 
     public function getImage($path, $driver = null)
@@ -181,6 +224,7 @@ class ResponsiveImages
     {
         $this->driver = $this->getFileSystemDriver($driver);
         $this->storage = Storage::disk($this->driver);
+        $path = self::isAbsoluteUrl($path) ? self::getRelativeUrl($path) : ltrim($path, '/');
         $status = $this->storage->put($path, $file);
         $sizes = @getimagesizefromstring($file);
         $imageData = [
@@ -204,6 +248,7 @@ class ResponsiveImages
         $this->driver = $this->getFileSystemDriver($driver);
         $this->storage = Storage::disk($this->driver);
         $this->networkMode = $this->getNetworkMode($networkMode);
+        $path = self::isAbsoluteUrl($path) ? self::getRelativeUrl($path) : ltrim($path, '/');
         $this->fileExists($path);
         return $this->image;
     }
@@ -225,56 +270,83 @@ class ResponsiveImages
         return $url;
     }
 
-    private function getImagePath($path, $sizes)
+    private function getImagePath($imagesData, $sizes)
     {
-        $path = $this->storage->path($path);
-
-        $original = $path;
-        $slices = explode('/', $path);
-        $filename = array_pop($slices);
-
-        $mask = dirname($path).'/%s-%s/%s/%s';
-
         $images = [];
         $imagesNotExist = [];
 
         $types = $this->getConfig('mime_types');
 
-        if($this->currentMime) {
-            if($currentExtension = $this->mimeToExtension($this->currentMime)) {
-                $types[] = $currentExtension;
+        foreach ($imagesData as $data) {
+
+            if (!$data) {
+                continue;
             }
-        }
 
-        foreach ($types as $type) {
-            foreach ($sizes as $s => $size){
+            if (in_array($data['type'], ['svg', 'gif', 'html'])) {
+                $images[$data['type']][$data['device']] = $data;
+                continue;
+            }
 
-                $imagename = pathinfo($filename, PATHINFO_FILENAME).'.'. $type;
+            $path = $data['path'];
 
-                $filePath = sprintf($mask, $size['width'] ?? 'auto', $size['height'] ?? 'auto', $this->mode, $imagename);
-                $images[$type][$s] = $this->generateDestinationPath($filePath);
+            $original = $path;
+            $slices = explode('/', $path);
+            $filename = ltrim(array_pop($slices), '/');
 
-                if(!$this->fileExists($images[$type][$s])){
-                    $imagesNotExist[$type][$s] = $images[$type][$s];
-                    $images[$type][$s] = $path;
-                }
+            $mask = dirname($path).'/%s-%s/%s/%s';
+
+            $size = $sizes[$data['device']];
+            $size2x = $sizes[$data['device'] . '_x2'];
+            foreach ($types as $type) {
+                $this->processImage($images, $imagesNotExist, $original, $filename, $type, $size, $size2x, $mask, $data);
+            }
+
+            if (!in_array($data['type'], $types)) {
+                $this->processImage($images, $imagesNotExist, $original, $filename, $data['type'], $size, $size2x, $mask, $data);
             }
         }
 
         if (count($imagesNotExist)) {
-            dispatch(new GenerateResponsiveImages($original, $imagesNotExist, $sizes, $this->driver, $this->networkMode));
+            dispatch(new GenerateResponsiveImages($imagesNotExist, $sizes, $this->driver, $this->networkMode));
         }
 
         return $images;
     }
 
+    private function processImage(array &$images, array &$imagesNotExist, string $original, string $filename, string $type, array $size, ?array $size2x, string $mask, array $data)
+    {
+        $imageName = pathinfo($filename, PATHINFO_FILENAME) . '.' . $type;
+        $filePath = sprintf($mask, $size['width'] ?? 'auto', $size['height'] ?? 'auto', $this->mode, $imageName);
+        $destinationPath = $this->generateDestinationPath($filePath);
+
+        if (!$this->fileExists($destinationPath)) {
+            $imagesNotExist[$original][$type][$data['device']] = $destinationPath;
+        } else {
+            $data['path'] = $destinationPath;
+        }
+
+        if ($size2x) {
+            $filePath = sprintf($mask, $size2x['width'] ?? 'auto', $size2x['height'] ?? 'auto', $this->mode, $imageName);
+            $destinationPath = ltrim($this->generateDestinationPath($filePath));
+
+            if (!$this->fileExists($destinationPath)) {
+                $imagesNotExist[$original][$type][$data['device'] . '_x2'] = $destinationPath;
+            } else {
+                $data['path_x2'] = $destinationPath;
+            }
+        }
+        $data['type'] = $type;
+        $images[$type][$data['device']] = $data;
+    }
+
     private function generateDestinationPath($path)
     {
-        return str_replace(
-            $this->storage->path(''),
-            rtrim($this->getConfig('destination'), '/') . '/',
-            $path
-        );
+        $destination = $this->getConfig('destination');
+        if ($destination) {
+            return $destination . '/' .  $path;
+        }
+        return $path;
     }
 
     private function makeSizesArray($array)
@@ -306,14 +378,14 @@ class ResponsiveImages
 
         $lk = array_key_last($images);
 
-        $this->lastMobileImage = $images[$lk]['mobile'] ?? null;
+        $this->lastMobileImage = $images[$lk]['mobile']['path'] ?? null;
 
         return $this->lastMobileImage;
     }
 
     private function fileExists($file)
     {
-        if(isset($this->loadedImages[$file])){
+        if (isset($this->loadedImages[$file])) {
             $this->image = $this->loadedImages[$file];
             return true;
         }
@@ -354,9 +426,11 @@ class ResponsiveImages
             'image/bmp' => 'bmp',
             'image/webp' => 'webp',
             'image/svg+xml' => 'svg',
+            'image/svg' => 'svg',
+            'text/html' => 'html'
         ];
 
-        return isset($mimeMap[$mimeType]) ? $mimeMap[$mimeType] : null;
+        return $mimeMap[$mimeType] ?? null;
     }
 
     private function printImageAttributes()
@@ -402,29 +476,20 @@ class ResponsiveImages
         }
     }
 
-    private function clearPath($path)
-    {
-        if(!$this->networkMode) {
-            return str_replace(public_path(), '', $path);
-        }
-
-        return $path;
-    }
-
     private function generateHtmlImage($result, $width, $height, $picture)
     {
-        if($this->lazy){
+        if ($this->lazy) {
             $result .= '<img class="' . $this->class_name . '"
                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-                data-src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
+                data-src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                     width="'.$width.'"
                     height="'.$height.'"
                 alt="' . $this->picture_title . '"
                 loading="lazy"
                 '. $this->printImageAttributes() .'>';
-        }else{
+        } else {
             $result .= '<img class="' . $this->class_name . '"
-                src="'.str_replace(' ','%20', $this->storage->url($this->clearPath($picture))) . '"
+                src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                     width="'.$width.'"
                     height="'.$height.'"
                 alt="' . $this->picture_title . '"
@@ -445,5 +510,88 @@ class ResponsiveImages
         }
 
         return $path;
+    }
+
+    private function checkImagesSizes(array $pictures)
+    {
+        $result = [];
+
+        $arraySizes = ['pc', 'tablet', 'mobile'];
+        foreach ($arraySizes as $index => $device) {
+            if (array_key_exists($index, $pictures) && ($pictures[$index] === null || $pictures[$index] === false)) {
+                continue;
+            }
+
+            $picturePath = $this->getValidPicturePath($pictures, $index);
+            if (!$picturePath) {
+                $replacementPicture = $this->findNearestAvailableImage($pictures, $index);
+                $picturePath = $replacementPicture ? $replacementPicture : null;
+            }
+
+            if (!$picturePath) {
+                continue;
+            }
+
+            $result[$device] = [
+                'path' => $picturePath,
+                'type' => $this->mimeToExtension($this->image->getMimeTypeAttribute()),
+                'device' => $device,
+            ];
+        }
+
+        return $result;
+    }
+
+    private function getValidPicturePath(array $pictures, int $index): ?string
+    {
+        $picture = $pictures[$index] ?? null;
+        if ($picture) {
+            $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
+            $picture = $this->checkAndReplaceEncodedFilePath($picture); //for some pictures which not find in reason spaces
+            if ($this->fileExists($picture)) {
+                return $picture;
+            }
+        }
+        return null;
+    }
+
+    private function findNearestAvailableImage(array $pictures, int $currentIndex): ?string
+    {
+        $total = count($pictures);
+
+        //search picture in previous indexes
+        for ($i = $currentIndex - 1; $i >= 0; $i--) {
+            $picture = $this->prepareAndCheckPicture($pictures[$i] ?? null);
+            if ($picture) {
+                return $picture;
+            }
+        }
+
+        //search picture in next indexes
+        for ($i = $currentIndex + 1; $i < $total; $i++) {
+            $picture = $this->prepareAndCheckPicture($pictures[$i] ?? null);
+            if ($picture) {
+                return $picture;
+            }
+        }
+
+        return null;
+    }
+
+    private function prepareAndCheckPicture(?string $picture): ?string
+    {
+        if (!$picture) {
+            return null;
+        }
+        $picture = self::isAbsoluteUrl($picture) ? self::getRelativeUrl($picture) : ltrim($picture, '/');
+        $picture = $this->checkAndReplaceEncodedFilePath($picture); //for some pictures which not find in reason spaces
+        if ($this->fileExists($picture)) {
+            $mimeType = $this->image->getMimeTypeAttribute($picture);
+            if (!in_array($mimeType, ['image/svg+xml', 'image/svg', 'image/gif', 'text/html'])) {
+                return $picture;
+            }
+        }
+
+        return null;
     }
 }

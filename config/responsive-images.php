@@ -19,7 +19,7 @@ return [
         'picture_class_name' => '',
         'lazyload' => false,
         'driver' => false,
-        'network_mode' => false,
+        'network_mode' => null,
         'image_attributes' => [
             //
         ]
