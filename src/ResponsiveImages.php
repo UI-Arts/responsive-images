@@ -283,7 +283,7 @@ class ResponsiveImages
                 continue;
             }
 
-            if (in_array($data['type'], ['svg', 'gif', 'html'])) {
+            if (in_array($data['type'], ['svg', 'svg+xml', 'gif', 'html'])) {
                 $images[$data['type']][$data['device']] = $data;
                 continue;
             }
@@ -425,7 +425,7 @@ class ResponsiveImages
             'image/gif' => 'gif',
             'image/bmp' => 'bmp',
             'image/webp' => 'webp',
-            'image/svg+xml' => 'svg',
+            'image/svg+xml' => 'svg+xml',
             'image/svg' => 'svg',
             'text/html' => 'html'
         ];
