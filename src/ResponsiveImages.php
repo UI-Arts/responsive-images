@@ -3,8 +3,6 @@
 namespace UIArts\ResponsiveImages;
 
 use Illuminate\Support\Facades\Storage;
-use League\Flysystem\Util;
-use Illuminate\Support\Facades\Log;
 use UIArts\ResponsiveImages\Jobs\GenerateResponsiveImages;
 use UIArts\ResponsiveImages\Models\ResponsiveImage;
 
@@ -480,19 +478,23 @@ class ResponsiveImages
     {
         if ($this->lazy) {
             $result .= '<img class="' . $this->class_name . '"
+                data-error-src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8+h8AAu8B9totwrcAAAAASUVORK5CYII="
                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
                 data-src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                     width="'.$width.'"
                     height="'.$height.'"
                 alt="' . $this->picture_title . '"
                 loading="lazy"
+                onerror="imgError(this)"
                 '. $this->printImageAttributes() .'>';
         } else {
             $result .= '<img class="' . $this->class_name . '"
+                data-error-src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8+h8AAu8B9totwrcAAAAASUVORK5CYII="
                 src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                     width="'.$width.'"
                     height="'.$height.'"
                 alt="' . $this->picture_title . '"
+                onerror="imgError(this)"
                 '. $this->printImageAttributes() .'>';
         }
 
