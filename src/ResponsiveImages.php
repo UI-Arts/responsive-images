@@ -23,6 +23,7 @@ class ResponsiveImages
     private $picture_title = 'Image';
     private $lastMobileImage;
     private $imageAttributes;
+    private $returnType = 'html';
 
     private function setup($options)
     {
@@ -48,6 +49,7 @@ class ResponsiveImages
         $this->lastMobileImage = null;
 
         $this->imageAttributes = $options['image_attributes'] ?? false;
+        $this->returnType = $options['return_type'] ?? 'html';
     }
 
     private function getConfig($key)
@@ -99,10 +101,21 @@ class ResponsiveImages
         $images = $this->getImagePath($pictures, $arraySizes);
 
         if (count($images)) {
-            foreach ($images as $type => $device) {
-                if ($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
-                    foreach ($device as $image) {
-                        $result .= $this->generateSourceTag($image, $mediaCondition);
+            if($this->returnType == 'json') {
+                $result = [];
+                foreach ($images as $type => $device) {
+                    if ($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
+                        foreach ($device as $image) {
+                            $result[] = $this->generateSourceJson($image);
+                        }
+                    }
+                }
+            }else{
+                foreach ($images as $type => $device) {
+                    if ($type == 'png' || isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'image/'.$type) >= 0) {
+                        foreach ($device as $image) {
+                            $result .= $this->generateSourceTag($image, $mediaCondition);
+                        }
                     }
                 }
             }
@@ -134,7 +147,18 @@ class ResponsiveImages
             }
         }
 
-        $result = $this->generateHtmlImage($result, $calculatedMinWidth, $calculatedMinHeight, $picturePath);
+
+        switch ($this->returnType) {
+            case 'html':
+                $result = $this->generateHtmlImage($result, $calculatedMinWidth, $calculatedMinHeight, $picturePath);
+                break;
+
+            case 'json':
+                return  $this->generateJsonImage($result, $calculatedMinWidth, $calculatedMinHeight, $picturePath);
+
+            default:
+                $result = '';
+        }
 
         return '<picture class="'. $this->picture_class_name .'">'. $result. '</picture>';
     }
@@ -159,6 +183,24 @@ class ResponsiveImages
 
         // Add type attribute
         $result .= ' type="image/' . $image['type'] . '">';
+
+        return $result;
+    }
+
+    private function generateSourceJson(array $image)
+    {
+        $result = [];
+
+        if (isset($image['path_x2'])) {
+            $result['x2'] = $this->storage->url($image['path_x2']);
+        }
+
+        if (isset($image['path'])) {
+            $result['x1'] = $this->storage->url($image['path']);
+        }
+
+        $result['type'] = $image['type'];
+        $result['device'] = $image['device'];
 
         return $result;
     }
@@ -499,6 +541,53 @@ class ResponsiveImages
         }
 
         return $result;
+    }
+
+    private function generateJsonImage($result, $width, $height, $picture)
+    {
+        $originalType = pathinfo($picture, PATHINFO_EXTENSION);
+
+        $sizes = [
+            '2x' => [],
+            '1x' => []
+        ];
+
+        foreach ($result as $item) {
+            $type = $item['type'];
+
+            foreach (['x1' => '1x', 'x2' => '2x'] as $key => $label) {
+                $url = $item[$key];
+
+                preg_match('~\/(\d+)-(auto|\d+)\/~', $url, $match);
+
+                $width = $match[1] ?? null;
+                $height = $match[2] ?? null;
+
+                $sizes[$label][$type] = [
+                    'mime_type' => "image/{$type}",
+                    'link' => $url,
+                    'width' => (string) $width,
+                    'height' => (string) $height,
+                ];
+            }
+        }
+
+        foreach ($sizes as $label => $formats) {
+            if (isset($formats[$originalType])) {
+                $sizes[$label]['original'] = $formats[$originalType];
+                unset($sizes[$label][$originalType]);
+            }
+        }
+
+        $data = [
+            'link' => $this->storage->url($picture),
+            'width' => $width,
+            'height' => $height,
+            'lazy' => $this->lazy,
+            'sizes' => $sizes
+        ];
+
+        return json_encode($data,  JSON_UNESCAPED_SLASHES);
     }
 
     private function checkAndReplaceEncodedFilePath($path)
