@@ -86,7 +86,11 @@ class ResponsiveImages
         $pictures = $this->checkImagesSizes(is_array($picture) ? $picture : [$picture]);
 
         if (is_null($picture) || (!isset($pictures['pc']) && !isset($pictures['tablet']) && !isset($pictures['mobile']))) {
-            return $this->setPlaceholder();
+            if($this->returnType == 'html') {
+                return $this->setPlaceholder();
+            }else{
+                return [];
+            }
         }
 
         $arraySizes = self::makeSizesArray([
@@ -584,15 +588,13 @@ class ResponsiveImages
             }
         }
 
-        $data = [
+        return [
             'link' => $this->storage->url($picture),
             'width' => $width,
             'height' => $height,
             'lazy' => $this->lazy,
             'sizes' => $sizes
         ];
-
-        return json_encode($data,  JSON_UNESCAPED_SLASHES);
     }
 
     private function checkAndReplaceEncodedFilePath($path)

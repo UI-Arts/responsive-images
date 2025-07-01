@@ -4,11 +4,17 @@ namespace UIArts\ResponsiveImages\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Intervention\Image\Facades\Image;
 use UIArts\ResponsiveImages\Models\ResponsiveImage;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\Encoders\WebpEncoder;
+use Intervention\Image\Encoders\JpegEncoder;
+use Intervention\Image\Encoders\PngEncoder;
+use Intervention\Image\Encoders\AvifEncoder;
 
 class GenerateResponsiveImages implements ShouldQueue
 {
@@ -30,43 +36,71 @@ class GenerateResponsiveImages implements ShouldQueue
 
     public function handle()
     {
+        $manager = new ImageManager(new Driver()); // обери відповідний драйвер
         $this->storage = Storage::disk($this->driver);
+
+        $encoders = [
+            'webp' => WebpEncoder::class,
+            'jpeg' => JpegEncoder::class,
+            'jpg'  => JpegEncoder::class,
+            'png'  => PngEncoder::class,
+            'avif' => AvifEncoder::class,
+        ];
+
         foreach ($this->paths as $originUrl => $paths) {
-            $originImage = Image::make($this->storage->get($originUrl));
+            // отримуємо зображення з драйвера
+            $originImage = $manager->read($this->storage->get($originUrl));
+
             foreach ($paths as $mime => $links) {
                 foreach ($links as $key => $link) {
                     if (!$this->fileExists($link)) {
                         $encoded = null;
+
                         $image = clone $originImage;
 
-                        $image->resize($this->sizes[$key]['width'], $this->sizes[$key]['height'], function ($constraint) {
-                            $constraint->aspectRatio();
-                            $constraint->upsize();
-                        });
+                        // resize з обмеженням пропорцій
+                        $image->resize(
+                            $this->sizes[$key]['width'],
+                            $this->sizes[$key]['height'],
+                            function ($constraint) {
+                                $constraint->aspectRatio();
+                                $constraint->upsize();
+                            }
+                        );
 
-                        if ($mime == 'webp') {
-                            $encoded = $image
-                                ->contrast(3)
-                                ->sharpen(4)
-                                ->brightness(1)
-                                ->encode($mime);
-                        } else {
-                            $encoded = $image->encode($mime);
+                        $encoderClass = $encoders[$mime] ?? null;
+
+                        if($encoderClass) {
+                            $encoder = new $encoderClass();
+
+                            if ($mime == 'webp') {
+                                $encoded = $image
+                                    ->contrast(3)
+                                    ->sharpen(4)
+                                    ->brightness(1)
+                                    ->encode($encoder);
+                            } else {
+                                $encoded = $image->encode($encoder);
+                            }
+
+                            if ($encoded) {
+                                $this->storage->put($link, (string)$encoded);
+                                $sizes = getimagesizefromstring((string)$encoded);
+
+                                ResponsiveImage::create([
+                                    'driver' => $this->driver,
+                                    'path' => $link,
+                                    'image_data' => json_encode([
+                                        'mime_type' => $sizes['mime'],
+                                        'width' => $sizes[0],
+                                        'height' => $sizes[1],
+                                    ]),
+                                ]);
+                            }
+                        }else{
+                            Log::info($mime.' Encoder not find');
                         }
 
-                        if ($encoded) {
-                            $this->storage->put($link, (string)$encoded);
-                            $sizes = getimagesizefromstring($encoded);
-                            ResponsiveImage::create([
-                                'driver' => $this->driver,
-                                'path' => $link,
-                                'image_data' => json_encode([
-                                    'mime_type' => $sizes['mime'],
-                                    'width' => $sizes[0],
-                                    'height' => $sizes[1],
-                                ]),
-                            ]);
-                        }
                     }
                 }
             }
