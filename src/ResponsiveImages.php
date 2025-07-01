@@ -556,6 +556,11 @@ class ResponsiveImages
             $type = $item['type'];
 
             foreach (['x1' => '1x', 'x2' => '2x'] as $key => $label) {
+
+                if(!isset($item[$key])){
+                    continue;
+                }
+
                 $url = $item[$key];
 
                 preg_match('~\/(\d+)-(auto|\d+)\/~', $url, $match);
