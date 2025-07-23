@@ -59,14 +59,14 @@ class GenerateResponsiveImages implements ShouldQueue
                         $image = clone $originImage;
 
                         // resize з обмеженням пропорцій
-                        $image->resize(
-                            $this->sizes[$key]['width'],
-                            $this->sizes[$key]['height'],
-                            function ($constraint) {
-                                $constraint->aspectRatio();
-                                $constraint->upsize();
-                            }
-                        );
+                        $width = $this->sizes[$key]['width'] ?? null;
+                        $height = $this->sizes[$key]['height'] ?? null;
+
+                        if (!is_null($width) && !is_null($height)) {
+                            $image = $image->cover($width, $height); // crop + scale
+                        } else {
+                            $image = $image->scaleDown($width, $height);
+                        }
 
                         $encoderClass = $encoders[$mime] ?? null;
 
