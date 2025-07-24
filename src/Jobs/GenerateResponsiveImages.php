@@ -59,14 +59,32 @@ class GenerateResponsiveImages implements ShouldQueue
                         $image = clone $originImage;
 
                         // resize з обмеженням пропорцій
-                        $width = $this->sizes[$key]['width'] ?? null;
-                        $height = $this->sizes[$key]['height'] ?? null;
+                        $targetWidth = $this->sizes[$key]['width'] ?? null;
+                        $targetHeight = $this->sizes[$key]['height'] ?? null;
 
-                        if (!is_null($width) && !is_null($height)) {
-                            $image = $image->cover($width, $height); // crop + scale
-                        } else {
-                            $image = $image->scaleDown($width, $height);
+                        $originalWidth = $image->width();
+                        $originalHeight = $image->height();
+
+                        if (is_null($targetWidth) && is_null($targetHeight)) {
+                            return $image;
                         }
+
+                        if (!is_null($targetWidth) && is_null($targetHeight)) {
+                            $ratio = $targetWidth / $originalWidth;
+                            $targetHeight = intval($originalHeight * $ratio);
+                        } elseif (is_null($targetWidth) && !is_null($targetHeight)) {
+                            $ratio = $targetHeight / $originalHeight;
+                            $targetWidth = intval($originalWidth * $ratio);
+                        } elseif (!is_null($targetWidth) && !is_null($targetHeight)) {
+                            $widthRatio = $targetWidth / $originalWidth;
+                            $heightRatio = $targetHeight / $originalHeight;
+                            $ratio = min($widthRatio, $heightRatio);
+
+                            $targetWidth = intval($originalWidth * $ratio);
+                            $targetHeight = intval($originalHeight * $ratio);
+                        }
+
+                        $image = $image->resize($targetWidth, $targetHeight);
 
                         $encoderClass = $encoders[$mime] ?? null;
 
