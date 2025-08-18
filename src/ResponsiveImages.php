@@ -21,6 +21,7 @@ class ResponsiveImages
     private $class_name = '';
     private $picture_class_name = '';
     private $picture_title = 'Image';
+    private $picture_alt = 'Image';
     private $lastMobileImage;
     private $imageAttributes;
     private $returnType = 'html';
@@ -44,6 +45,7 @@ class ResponsiveImages
         $this->mode = $options['mode'];
         $this->class_name = $options['class_name'];
         $this->picture_title = $options['picture_title'];
+        $this->picture_alt = $options['picture_alt'] ?? null;
         $this->picture_class_name = $options['picture_class_name'];
 
         $this->lastMobileImage = null;
@@ -501,7 +503,7 @@ class ResponsiveImages
                                  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
                                  width="' . $this->size_pc[0] . '"
                                  height="' . $this->size_pc[1] . '"
-                                 loading="lazy" alt="' . $this->picture_title . '">
+                                 loading="lazy" alt="' . $this->picture_alt . '" title="' . $this->picture_title . '">
                         </picture>';
 
             case 'dynamic':
@@ -511,7 +513,7 @@ class ResponsiveImages
                                     ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '"
                                  width="' . $this->size_pc[0] . '"
                                  height="' . ($this->size_pc[1] >= 1000 ? $this->size_pc[0] / 2 : $this->size_pc[1]) . '"
-                                 loading="lazy" alt="' . $this->picture_title . '">
+                                 loading="lazy" alt="' . $this->picture_alt . '" title="' . $this->picture_title . '">
                         </picture>';
 
             case 'none':
@@ -529,7 +531,8 @@ class ResponsiveImages
                 data-src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                     width="'.$width.'"
                     height="'.$height.'"
-                alt="' . $this->picture_title . '"
+                alt="' . $this->picture_alt . '"
+                title="' . $this->picture_title . '"
                 loading="lazy"
                 onerror="imgError(this)"
                 '. $this->printImageAttributes() .'>';
@@ -539,7 +542,8 @@ class ResponsiveImages
                 src="'.str_replace(' ','%20', $this->storage->url($picture)) . '"
                     width="'.$width.'"
                     height="'.$height.'"
-                alt="' . $this->picture_title . '"
+                alt="' . $this->picture_alt . '"
+                title="' . $this->picture_title . '"
                 onerror="imgError(this)"
                 '. $this->printImageAttributes() .'>';
         }

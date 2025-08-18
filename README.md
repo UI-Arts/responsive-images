@@ -3,6 +3,7 @@ Usage:
 ```php
 $options = [
     'picture_title' => 'Image',
+    'picture_alt' => 'Image alt',
     'size_pc' => '380, auto',
     'size_tablet' => '354, auto',
     'size_mobile' => '290, auto',
