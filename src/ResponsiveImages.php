@@ -279,11 +279,11 @@ class ResponsiveImages
 
         foreach ($imagesData as $data) {
 
-            if (!$data) {
+            if (!$data || is_null($data['type'])) {
                 continue;
             }
 
-            if (in_array($data['type'], ['svg', 'svg+xml', 'gif', 'html'])) {
+            if (in_array($data['type'], $this->getConfig('exclude_types'))) {
                 $images[$data['type']][$data['device']] = $data;
                 continue;
             }

@@ -9,6 +9,7 @@ return [
     'exclude_mimes' => [
 //
     ],
+    'exclude_types' => ['svg+xml', 'svg', 'gif', 'avif'],
     'default_options' => [
         'picture_title' => 'Image',
         'size_pc' => '380, 380',
