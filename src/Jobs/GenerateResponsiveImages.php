@@ -51,6 +51,10 @@ class GenerateResponsiveImages implements ShouldQueue
             // отримуємо зображення з драйвера
             $originImage = $manager->read($this->storage->get($originUrl));
 
+            if(!$originImage) {
+                continue;
+            }
+
             foreach ($paths as $mime => $links) {
                 foreach ($links as $key => $link) {
                     if (!$this->fileExists($link)) {
